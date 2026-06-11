@@ -88,7 +88,12 @@ class Translator {
      * Handles boolean/int literals and {@code static final} field references.
      */
     private Optional<Object> evaluateToConstant(ExpressionTree expr) {
-        try { java.nio.file.Files.write(java.nio.file.Path.of("/tmp/ccp.log"), ("[CCP-EVAL] expr=" + expr + " class=" + expr.getClass().getName() + "\n").getBytes(), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND); } catch (Exception ignored) {}
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/tmp/ccp.log", true);
+            fw.write("[CCP-EVAL] expr=" + expr + " class=" + expr.getClass().getName() + "\n");
+            fw.flush();
+            fw.close();
+        } catch (Exception ignored) {}
         // javac wraps if-conditions in JCParens; unwrap before evaluating
         if (expr instanceof ParenthesizedTree paren) {
             return evaluateToConstant(paren.getExpression());
@@ -322,6 +327,12 @@ class Translator {
                 yield type != null ? new CAST.Statement.VariableDefinition(type, variable(name), initializer) : null;
             }
             case IfTree ifTree -> {
+                try {
+                    java.io.FileWriter fw = new java.io.FileWriter("/tmp/ccp.log", true);
+                    fw.write("[CCP-IF] cond=" + ifTree.getCondition() + " condClass=" + ifTree.getCondition().getClass().getName() + " hasElse=" + (ifTree.getElseStatement() != null) + "\n");
+                    fw.flush();
+                    fw.close();
+                } catch (Exception ignored) {}
                 // Constant folding: if (true) → then-block, if (false) → else-block (or nothing)
                 var constVal = evaluateToConstant(ifTree.getCondition());
                 if (constVal.isPresent() && constVal.get() instanceof Boolean boolVal) {
