@@ -93,14 +93,17 @@ class Translator {
             return evaluateToConstant(paren.getExpression());
         }
         if (expr instanceof LiteralTree lit && lit.getValue() != null) {
-            // javac represents boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL
+            Object v = lit.getValue();
+            compilerPlugin.logger.printRawLines("[CCP-LIT] kind=" + lit.getKind() + " valueClass=" + v.getClass().getName() + " value=" + v + " toString=" + lit);
+            // javac may represent boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL,
+            // or as Boolean directly depending on internal AST stage.
             if (lit.getKind() == Tree.Kind.BOOLEAN_LITERAL) {
-                Object v = lit.getValue();
                 if (v instanceof Boolean b) return Optional.of(b);
                 if (v instanceof Number n) return Optional.of(n.intValue() != 0);
                 return Optional.of(Boolean.parseBoolean(v.toString()));
             }
-            return Optional.of(lit.getValue());
+            if (v instanceof Boolean b) return Optional.of(b);
+            return Optional.of(v);
         }
         // static final field reference (simple name in same class)
         if (expr instanceof IdentifierTree ident) {
