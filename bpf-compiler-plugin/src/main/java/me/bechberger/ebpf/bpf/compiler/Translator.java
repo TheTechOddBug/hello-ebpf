@@ -89,6 +89,10 @@ class Translator {
      */
     private Optional<Object> evaluateToConstant(ExpressionTree expr) {
         if (expr instanceof LiteralTree lit && lit.getValue() != null) {
+            // javac represents boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL
+            if (lit.getKind() == Tree.Kind.BOOLEAN_LITERAL) {
+                return Optional.of(lit.getValue().equals(1));
+            }
             return Optional.of(lit.getValue());
         }
         // static final field reference (simple name in same class)
