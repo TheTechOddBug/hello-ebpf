@@ -246,6 +246,14 @@ class Translator {
 
     CAST.Statement.CompoundStatement translate(BlockTree block, boolean emitLineDirectives) {
         var statements = block.getStatements();
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/tmp/ccp.log", true);
+            for (var s : statements) {
+                fw.write("[CCP-BLK] stmtClass=" + s.getClass().getName() + " text=" + s.toString().replace("\n", " ").substring(0, Math.min(80, s.toString().length())) + "\n");
+            }
+            fw.flush();
+            fw.close();
+        } catch (Exception ignored) {}
         var translated = new ArrayList<Statement>();
         var hadError = false;
         for (var statement : statements) {
