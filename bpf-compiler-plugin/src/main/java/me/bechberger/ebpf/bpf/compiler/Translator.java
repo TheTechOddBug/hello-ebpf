@@ -88,19 +88,12 @@ class Translator {
      * Handles boolean/int literals and {@code static final} field references.
      */
     private Optional<Object> evaluateToConstant(ExpressionTree expr) {
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("/tmp/ccp.log", true);
-            fw.write("[CCP-EVAL] expr=" + expr + " class=" + expr.getClass().getName() + "\n");
-            fw.flush();
-            fw.close();
-        } catch (Exception ignored) {}
         // javac wraps if-conditions in JCParens; unwrap before evaluating
         if (expr instanceof ParenthesizedTree paren) {
             return evaluateToConstant(paren.getExpression());
         }
         if (expr instanceof LiteralTree lit && lit.getValue() != null) {
             Object v = lit.getValue();
-            try { java.nio.file.Files.write(java.nio.file.Path.of("/tmp/ccp.log"), ("[CCP-LIT] kind=" + lit.getKind() + " valueClass=" + v.getClass().getName() + " value=" + v + " toString=" + lit + "\n").getBytes(), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND); } catch (Exception ignored) {}
             // javac may represent boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL,
             // or as Boolean directly depending on internal AST stage.
             if (lit.getKind() == Tree.Kind.BOOLEAN_LITERAL) {
@@ -246,19 +239,6 @@ class Translator {
 
     CAST.Statement.CompoundStatement translate(BlockTree block, boolean emitLineDirectives) {
         var statements = block.getStatements();
-        System.err.println("[CCP-BLK] block has " + statements.size() + " stmts");
-        for (var s : statements) {
-            System.err.println("[CCP-BLK]   stmtClass=" + s.getClass().getName());
-        }
-        System.err.flush();
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("/tmp/ccp.log", true);
-            for (var s : statements) {
-                fw.write("[CCP-BLK] stmtClass=" + s.getClass().getName() + " text=" + s.toString().replace("\n", " ").substring(0, Math.min(80, s.toString().length())) + "\n");
-            }
-            fw.flush();
-            fw.close();
-        } catch (Exception ignored) {}
         var translated = new ArrayList<Statement>();
         var hadError = false;
         for (var statement : statements) {
@@ -340,12 +320,6 @@ class Translator {
                 yield type != null ? new CAST.Statement.VariableDefinition(type, variable(name), initializer) : null;
             }
             case IfTree ifTree -> {
-                try {
-                    java.io.FileWriter fw = new java.io.FileWriter("/tmp/ccp.log", true);
-                    fw.write("[CCP-IF] cond=" + ifTree.getCondition() + " condClass=" + ifTree.getCondition().getClass().getName() + " hasElse=" + (ifTree.getElseStatement() != null) + "\n");
-                    fw.flush();
-                    fw.close();
-                } catch (Exception ignored) {}
                 // Constant folding: if (true) → then-block, if (false) → else-block (or nothing)
                 var constVal = evaluateToConstant(ifTree.getCondition());
                 if (constVal.isPresent() && constVal.get() instanceof Boolean boolVal) {
