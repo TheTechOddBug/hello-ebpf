@@ -1395,4 +1395,102 @@ public class CompilerPluginTest {
                 """, code);
     }
 
+    // --- C.3: Constant folding tests ---
+
+    @BPF
+    public static abstract class ConstantFoldFalse extends BPFProgram {
+        static final String EBPF_PROGRAM = "#include \"vmlinux.h\"";
+
+        @BuiltinBPFFunction("illegal_helper()")
+        @NotUsableInJava
+        public void illegalHelper() {
+            throw new MethodIsBPFRelatedFunction();
+        }
+
+        @BPFFunction
+        public int test(int x) {
+            if (false) {
+                illegalHelper();
+            }
+            return x;
+        }
+    }
+
+    @Test
+    public void testConstantFoldFalse() {
+        String code = BPFProgram.getCode(ConstantFoldFalse.class);
+        // The dead branch should be eliminated; illegal_helper must not appear
+        assertEqualsDiffed("""
+                void illegalHelper();
+
+                s32 test(s32 x);
+
+                s32 test(s32 x) {
+                  return x;
+                }
+                """, code);
+    }
+
+    @BPF
+    public static abstract class ConstantFoldTrue extends BPFProgram {
+        static final String EBPF_PROGRAM = "#include \"vmlinux.h\"";
+
+        @BPFFunction
+        public int test(int x) {
+            if (true) {
+                return x + 1;
+            } else {
+                return x - 1;
+            }
+        }
+    }
+
+    @Test
+    public void testConstantFoldTrue() {
+        String code = BPFProgram.getCode(ConstantFoldTrue.class);
+        assertEqualsDiffed("""
+                s32 test(s32 x);
+
+                s32 test(s32 x) {
+                  return x + 1;
+                }
+                """, code);
+    }
+
+    @BPF
+    public static abstract class ConstantFoldStaticField extends BPFProgram {
+        static final String EBPF_PROGRAM = "#include \"vmlinux.h\"";
+
+        static final boolean FEATURE_ENABLED = false;
+
+        @BuiltinBPFFunction("unused_helper()")
+        @NotUsableInJava
+        public void unusedHelper() {
+            throw new MethodIsBPFRelatedFunction();
+        }
+
+        @BPFFunction
+        public int test(int x) {
+            if (FEATURE_ENABLED) {
+                unusedHelper();
+                return x + 99;
+            }
+            return x;
+        }
+    }
+
+    @Test
+    public void testConstantFoldStaticField() {
+        String code = BPFProgram.getCode(ConstantFoldStaticField.class);
+        assertEqualsDiffed("""
+                void unusedHelper();
+
+                s32 test(s32 x);
+
+                s32 test(s32 x) {
+                  return x;
+                }
+                """, code);
+    }
+
 }
