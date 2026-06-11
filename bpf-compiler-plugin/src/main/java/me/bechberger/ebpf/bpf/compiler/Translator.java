@@ -88,14 +88,14 @@ class Translator {
      * Handles boolean/int literals and {@code static final} field references.
      */
     private Optional<Object> evaluateToConstant(ExpressionTree expr) {
-        compilerPlugin.logger.printRawLines("[CCP-EVAL] expr=" + expr + " class=" + expr.getClass().getName());
+        try { java.nio.file.Files.write(java.nio.file.Path.of("/tmp/ccp.log"), ("[CCP-EVAL] expr=" + expr + " class=" + expr.getClass().getName() + "\n").getBytes(), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND); } catch (Exception ignored) {}
         // javac wraps if-conditions in JCParens; unwrap before evaluating
         if (expr instanceof ParenthesizedTree paren) {
             return evaluateToConstant(paren.getExpression());
         }
         if (expr instanceof LiteralTree lit && lit.getValue() != null) {
             Object v = lit.getValue();
-            compilerPlugin.logger.printRawLines("[CCP-LIT] kind=" + lit.getKind() + " valueClass=" + v.getClass().getName() + " value=" + v + " toString=" + lit);
+            try { java.nio.file.Files.write(java.nio.file.Path.of("/tmp/ccp.log"), ("[CCP-LIT] kind=" + lit.getKind() + " valueClass=" + v.getClass().getName() + " value=" + v + " toString=" + lit + "\n").getBytes(), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND); } catch (Exception ignored) {}
             // javac may represent boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL,
             // or as Boolean directly depending on internal AST stage.
             if (lit.getKind() == Tree.Kind.BOOLEAN_LITERAL) {
