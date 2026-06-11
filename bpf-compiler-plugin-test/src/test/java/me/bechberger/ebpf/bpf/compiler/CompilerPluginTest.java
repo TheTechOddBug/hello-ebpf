@@ -1421,8 +1421,6 @@ public class CompilerPluginTest {
         String code = BPFProgram.getCode(ConstantFoldFalse.class);
         // The dead branch should be eliminated; illegal_helper must not appear
         assertEqualsDiffed("""
-                void illegalHelper();
-
                 s32 test(s32 x);
 
                 s32 test(s32 x) {
@@ -1483,8 +1481,6 @@ public class CompilerPluginTest {
     public void testConstantFoldStaticField() {
         String code = BPFProgram.getCode(ConstantFoldStaticField.class);
         assertEqualsDiffed("""
-                void unusedHelper();
-
                 s32 test(s32 x);
 
                 s32 test(s32 x) {

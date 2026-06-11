@@ -88,6 +88,10 @@ class Translator {
      * Handles boolean/int literals and {@code static final} field references.
      */
     private Optional<Object> evaluateToConstant(ExpressionTree expr) {
+        // javac wraps if-conditions in JCParens; unwrap before evaluating
+        if (expr instanceof ParenthesizedTree paren) {
+            return evaluateToConstant(paren.getExpression());
+        }
         if (expr instanceof LiteralTree lit && lit.getValue() != null) {
             // javac represents boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL
             if (lit.getKind() == Tree.Kind.BOOLEAN_LITERAL) {
