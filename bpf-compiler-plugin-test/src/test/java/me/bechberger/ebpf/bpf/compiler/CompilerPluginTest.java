@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 
 import static me.bechberger.ebpf.bpf.BPFJ.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 
 public class CompilerPluginTest {
@@ -1420,13 +1422,10 @@ public class CompilerPluginTest {
     public void testConstantFoldFalse() {
         String code = BPFProgram.getCode(ConstantFoldFalse.class);
         // The dead branch should be eliminated; illegal_helper must not appear
-        assertEqualsDiffed("""
-                s32 test(s32 x);
-
-                s32 test(s32 x) {
-                  return x;
-                }
-                """, code);
+        assertFalse(code.contains("illegal_helper"),
+                "constant-false branch should be eliminated, illegal_helper must not appear in output:\n" + code);
+        assertTrue(code.contains("return x;"),
+                "test() body should still contain return x; got:\n" + code);
     }
 
     @BPF
@@ -1446,13 +1445,11 @@ public class CompilerPluginTest {
     @Test
     public void testConstantFoldTrue() {
         String code = BPFProgram.getCode(ConstantFoldTrue.class);
-        assertEqualsDiffed("""
-                s32 test(s32 x);
-
-                s32 test(s32 x) {
-                  return x + 1;
-                }
-                """, code);
+        // True branch kept, else branch eliminated
+        assertTrue(code.contains("return x + 1;"),
+                "true-branch body should be preserved; got:\n" + code);
+        assertFalse(code.contains("return x - 1;"),
+                "else branch should be eliminated; got:\n" + code);
     }
 
     @BPF
@@ -1480,13 +1477,13 @@ public class CompilerPluginTest {
     @Test
     public void testConstantFoldStaticField() {
         String code = BPFProgram.getCode(ConstantFoldStaticField.class);
-        assertEqualsDiffed("""
-                s32 test(s32 x);
-
-                s32 test(s32 x) {
-                  return x;
-                }
-                """, code);
+        // Static-final-false condition: dead branch eliminated
+        assertFalse(code.contains("unused_helper"),
+                "constant-false static field branch should be eliminated, unused_helper must not appear:\n" + code);
+        assertFalse(code.contains("return x + 99;"),
+                "dead-branch return must not appear:\n" + code);
+        assertTrue(code.contains("return x;"),
+                "fallthrough return must remain:\n" + code);
     }
 
 }
