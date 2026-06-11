@@ -95,7 +95,10 @@ class Translator {
         if (expr instanceof LiteralTree lit && lit.getValue() != null) {
             // javac represents boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL
             if (lit.getKind() == Tree.Kind.BOOLEAN_LITERAL) {
-                return Optional.of(lit.getValue().equals(1));
+                Object v = lit.getValue();
+                if (v instanceof Boolean b) return Optional.of(b);
+                if (v instanceof Number n) return Optional.of(n.intValue() != 0);
+                return Optional.of(Boolean.parseBoolean(v.toString()));
             }
             return Optional.of(lit.getValue());
         }
