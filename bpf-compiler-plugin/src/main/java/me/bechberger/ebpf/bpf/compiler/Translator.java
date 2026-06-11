@@ -88,31 +88,42 @@ class Translator {
      * Handles boolean/int literals and {@code static final} field references.
      */
     private Optional<Object> evaluateToConstant(ExpressionTree expr) {
+        System.err.println("[CCP] evaluateToConstant: expr=" + expr + " class=" + expr.getClass().getName() + " kind=" + expr.getKind());
         // javac wraps if-conditions in JCParens; unwrap before evaluating
         if (expr instanceof ParenthesizedTree paren) {
+            System.err.println("[CCP]   -> ParenthesizedTree, recursing");
             return evaluateToConstant(paren.getExpression());
         }
         if (expr instanceof LiteralTree lit && lit.getValue() != null) {
+            System.err.println("[CCP]   -> LiteralTree value=" + lit.getValue() + " valueClass=" + lit.getValue().getClass().getName() + " kind=" + lit.getKind());
             // javac represents boolean literals as Integer(0)/Integer(1) with kind BOOLEAN_LITERAL
             if (lit.getKind() == Tree.Kind.BOOLEAN_LITERAL) {
-                return Optional.of(lit.getValue().equals(1));
+                var b = lit.getValue().equals(1);
+                System.err.println("[CCP]   -> BOOLEAN_LITERAL -> " + b);
+                return Optional.of(b);
             }
             return Optional.of(lit.getValue());
         }
         // static final field reference (simple name in same class)
         if (expr instanceof IdentifierTree ident) {
             var element = compilerPlugin.trees.getElement(methodPath.path(ident));
-            if (element instanceof VariableElement ve && ve.getConstantValue() != null) {
-                return Optional.of(ve.getConstantValue());
+            System.err.println("[CCP]   -> IdentifierTree name=" + ident.getName() + " element=" + element);
+            if (element instanceof VariableElement ve) {
+                System.err.println("[CCP]      VariableElement constantValue=" + ve.getConstantValue());
+                if (ve.getConstantValue() != null) {
+                    return Optional.of(ve.getConstantValue());
+                }
             }
         }
         // static final field reference (qualified: ClassName.FIELD)
         if (expr instanceof MemberSelectTree mst) {
             var element = compilerPlugin.trees.getElement(methodPath.path(mst));
+            System.err.println("[CCP]   -> MemberSelectTree expr=" + mst + " element=" + element);
             if (element instanceof VariableElement ve && ve.getConstantValue() != null) {
                 return Optional.of(ve.getConstantValue());
             }
         }
+        System.err.println("[CCP]   -> empty");
         return Optional.empty();
     }
 
@@ -309,8 +320,11 @@ class Translator {
             }
             case IfTree ifTree -> {
                 // Constant folding: if (true) → then-block, if (false) → else-block (or nothing)
+                System.err.println("[CCP] IfTree case entered. condition=" + ifTree.getCondition() + " condClass=" + ifTree.getCondition().getClass().getName());
                 var constVal = evaluateToConstant(ifTree.getCondition());
+                System.err.println("[CCP] IfTree constVal.isPresent=" + constVal.isPresent() + " value=" + constVal.orElse(null) + " valueClass=" + (constVal.isPresent() ? constVal.get().getClass().getName() : "n/a"));
                 if (constVal.isPresent() && constVal.get() instanceof Boolean boolVal) {
+                    System.err.println("[CCP] IfTree FOLDING with boolVal=" + boolVal);
                     if (boolVal) {
                         yield translate(ifTree.getThenStatement());
                     } else {
@@ -318,6 +332,7 @@ class Translator {
                                 ? translate(ifTree.getElseStatement()) : new VerbatimStatement("");
                     }
                 }
+                System.err.println("[CCP] IfTree NOT folded, falling through to normal translation");
                 var condition = translate(ifTree.getCondition());
                 var thenStatement = translate(ifTree.getThenStatement());
                 var elseStatement = callIfNonNull(ifTree.getElseStatement(), this::translate);
