@@ -88,6 +88,7 @@ class Translator {
      * Handles boolean/int literals and {@code static final} field references.
      */
     private Optional<Object> evaluateToConstant(ExpressionTree expr) {
+        compilerPlugin.logger.printRawLines("[CCP-EVAL] expr=" + expr + " class=" + expr.getClass().getName());
         // javac wraps if-conditions in JCParens; unwrap before evaluating
         if (expr instanceof ParenthesizedTree paren) {
             return evaluateToConstant(paren.getExpression());
