@@ -7,36 +7,6 @@
 s64 _exitCode SEC(".data");
 s64 _exitKind SEC(".data");
 
-/*
- * scx_bpf_error() wraps scx_bpf_error_bstr() with variadic args instead
- * of a u64 array. Invoking it exits the scheduler in an erroneous state
- * and passes diagnostic info back to userspace.
- *
- * The __ksym decl is required because the macro expands to a direct call
- * to scx_bpf_error_bstr that the plugin's per-call kfunc-decl emission
- * cannot see through (macros expand after codegen).
- */
-void scx_bpf_error_bstr(char *fmt, unsigned long long *data, u32 data_len) __ksym;
-
-#define scx_bpf_error(fmt, args...)						\
-({										\
-	static char ___fmt[] = fmt;						\
-	unsigned long long ___param[___bpf_narg(args) ?: 1] = {};		\
-	_Pragma("GCC diagnostic push")						\
-	_Pragma("GCC diagnostic ignored \"-Wint-conversion\"")			\
-	___bpf_fill(___param, args);						\
-	_Pragma("GCC diagnostic pop")						\
-	scx_bpf_error_bstr(___fmt, ___param, sizeof(___param));			\
-})
-
-/* Linux PF_KTHREAD flag, referenced by hasSchedulingConstraints() below.
- * Emitted here (rather than relying on plugin constant emission from the
- * PerProcessFlags inner class) so it precedes the first use in the file. */
-#ifndef PF_KTHREAD
-#define PF_KTHREAD 0x00200000
-#endif
-
-
 #define PF_KTHREAD 2097152
 
 __always_inline bool hasSchedulingConstraints(struct task_struct *p);
@@ -55,18 +25,6 @@ __always_inline s32 selectCpuFifoIdleOrFallback(struct task_struct *p, s32 prev_
 
 __always_inline bool isSmaller(u64 a, u64 b);
 
-__always_inline int vtimeCharge(struct task_struct *p);
-
-struct task_struct;
-
-__always_inline int dsqInsert(struct task_struct *p, s64 enq_flags);
-__always_inline bool hasSchedulingConstraints(struct task_struct *p);
-__always_inline bool isDescendantOf(struct task_struct *p, s32 targetTgid);
-__always_inline bool isMigrationDisabled(struct task_struct *p);
-__always_inline bool isSmaller(u64 a, u64 b);
-__always_inline s64 scaleByTaskWeight(struct task_struct *p, s64 value);
-__always_inline s32 selectCpuDfl(struct task_struct *p, s32 prev_cpu, s64 wake_flags);
-__always_inline s32 selectCpuFifoIdleOrFallback(struct task_struct *p, s32 prev_cpu, s64 wake_flags, u64 dsqId);
 __always_inline int vtimeCharge(struct task_struct *p);
 
 
@@ -102,13 +60,13 @@ SEC("struct_ops/exit") void BPF_PROG(sched_exit, struct scx_exit_info *ei) {
   #line 83 "SchedulerBase.java"
   _exitKind = (s64)(long)(BPF_CORE_READ(ei, kind));
 }
+#define SHARED_DSQ_ID 0L
 
 __always_inline bool hasSchedulingConstraints(struct task_struct *p) {
   #line 100 "SchedulerHelpers.java"
   return ((BPF_CORE_READ(p, flags) & PF_KTHREAD) != 0) || (BPF_CORE_READ(p, nr_cpus_allowed) != scx_bpf_nr_cpu_ids());
 }
 
-#define SHARED_DSQ_ID 0L
 SEC("struct_ops.s/init") s32 BPF_PROG(sched_init) {
   #line 73 "SchedulerBase.java"
   return scx_bpf_create_dsq(SHARED_DSQ_ID, -1);
