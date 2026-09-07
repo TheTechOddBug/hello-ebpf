@@ -1,0 +1,143 @@
+tag: experimental
+github_pages: https://parttimenerd.github.io/hello-ebpf/
+tagline: The Java library for eBPF. Write eBPF programs and the accompanying user-land code in
+  pure Java 22+, without leaving the JVM. Covers tracepoints, kprobes, uprobes, XDP/TC network filters,
+  and custom Linux schedulers via sched-ext.
+tagline_short: Write eBPF programs in pure Java 22+ — tracepoints, kprobes, schedulers, network filters.
+when_to_use:
+- You want to write eBPF observability tools, schedulers, or network filters without leaving the JVM
+- You are exploring Linux kernel internals from Java
+- You want to follow the accompanying blog series and build understanding step by step
+when_not_to_use:
+- You need a production-ready, stable eBPF framework
+- You need broad kernel version support (requires kernel 6.17+ with BTF)
+- You are on macOS or Windows (macOS works via Lima VM — see docs)
+links:
+- label: Blog series ↗
+  url: https://mostlynerdless.de/blog/category/ebpf/
+no_release: true
+install:
+- label: Maven
+  lang: xml
+  code: |
+    <dependency>
+      <groupId>me.bechberger</groupId>
+      <artifactId>bpf</artifactId>
+      <version>VERSION</version>
+    </dependency>
+    <!-- also copy .mvn/jvm.config from the hello-ebpf repo and add the annotation processor: -->
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-compiler-plugin</artifactId>
+      <version>3.8.0</version>
+      <configuration>
+        <annotationProcessors>
+          <annotationProcessor>me.bechberger.ebpf.bpf.processor.Processor</annotationProcessor>
+        </annotationProcessors>
+        <compilerArgs>
+          <arg>-Xplugin:BPFCompilerPlugin</arg>
+        </compilerArgs>
+      </configuration>
+    </plugin>
+usage:
+- label: Tracepoint
+  lang: java
+  code: |
+    @BPF(license = "GPL")
+    public abstract class HelloWorld extends BPFProgram implements SystemCallHooks {
+        @Override
+        public void enterOpenat2(int dfd, String filename, Ptr<open_how> how) {
+            bpf_trace_printk("opening: %s", filename);
+        }
+        public static void main(String[] args) {
+            try (HelloWorld p = BPFProgram.load(HelloWorld.class)) {
+                p.autoAttachPrograms();
+                p.tracePrintLoop(f -> f.task() + ": " + f.msg());
+            }
+        }
+    }
+how_to:
+- title: Set up prerequisites on Linux
+  body: |
+    Requires Linux kernel 6.17+, Java 22+, libbpf, and root privileges.
+    ```bash
+    apt install libbpf-dev linux-tools-common linux-tools-$(uname -r)
+    ```
+    Run the doctor script from the repo root to verify your setup:
+    ```bash
+    ./scripts/doctor.sh
+    ```
+
+- title: Run a hello-world tracepoint program
+  body: |
+    The kernel-side method is compiled to BPF bytecode via the annotation processor at build time.
+    Run with `sudo` and `--enable-native-access` (required for the Panama foreign-function API):
+    ```bash
+    mvn package
+    sudo java --enable-native-access=ALL-UNNAMED \
+         -cp target/bpf-samples.jar me.bechberger.ebpf.samples.HelloWorld
+    ```
+    Expected output (one line per `openat2` syscall from any process):
+    ```
+    cat: opening: /etc/hosts
+    java: opening: /proc/self/status
+    ```
+
+- title: Drop every third incoming packet with XDP
+  body: |
+    XDP hooks run directly in the kernel on every incoming packet — before the network stack:
+    ```java
+    @BPF(license = "GPL")
+    public abstract class XDPDropEveryThirdPacket extends BPFProgram implements XDPHook {
+        final GlobalVariable<@Unsigned Integer> count = new GlobalVariable<>(0);
+
+        @Override
+        public xdp_action xdpHandlePacket(Ptr<xdp_md> ctx) {
+            count.set(count.get() + 1);
+            return count.get() % 3 == 1 ? xdp_action.XDP_DROP : xdp_action.XDP_PASS;
+        }
+
+        public static void main(String[] args) throws InterruptedException {
+            try (var p = BPFProgram.load(XDPDropEveryThirdPacket.class)) {
+                p.xdpAttach(XDPUtil.getNetworkInterfaceIndex());
+                while (true) { System.out.println("Packets: " + p.count.get()); Thread.sleep(1000); }
+            }
+        }
+    }
+    ```
+
+- title: Write a custom Linux CPU scheduler
+  body: |
+    sched_ext (kernel 6.14+) lets you replace the Linux CPU scheduler with BPF. The minimal
+    scheduler needs just `enqueue()` — `SchedulerBase` provides the shared dispatch queue,
+    `init()`, `dispatch()`, and `exit()` defaults:
+    ```java
+    @BPF(license = "GPL")
+    @Property(name = "sched_name", value = "my_scheduler")
+    public abstract class MyScheduler extends SchedulerBase implements Scheduler {
+        final DispatchQueue shared = DispatchQueue.attach(SHARED_DSQ_ID);
+
+        @Override
+        public void enqueue(Ptr<task_struct> p, long enq_flags) {
+            shared.insertScaled(p, EnqFlags.passThrough(enq_flags));
+        }
+
+        public static void main(String[] args) throws Exception {
+            try (var sched = BPFProgram.load(MyScheduler.class)) {
+                sched.runSchedulerLoop(); // attach + block until Ctrl-C
+            }
+        }
+    }
+    ```
+    Requires `ls /sys/kernel/sched_ext` to exist and `systemctl stop scx` if another
+    scx scheduler is already running.
+
+- title: Use on macOS via Lima VM
+  body: |
+    hello-ebpf requires Linux. On macOS, use the bundled Lima VM config:
+    ```bash
+    limactl start hello-ebpf.yaml --mount-writable
+    limactl shell hello-ebpf sudo bin/install.sh
+    limactl shell hello-ebpf
+    sudo -s PATH=$PATH   # root required for BPF program loading
+    ```
